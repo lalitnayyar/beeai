@@ -4,8 +4,13 @@ const agentStatusInfo = document.getElementById("agentStatusInfo");
 const pendingRequestPopup = document.getElementById("pendingRequestPopup");
 const opSenderId = document.getElementById("opSenderId");
 const opSenderName = document.getElementById("opSenderName");
+const opConversationId = document.getElementById("opConversationId");
+const opSessionSelect = document.getElementById("opSessionSelect");
+const opNewSessionBtn = document.getElementById("opNewSessionBtn");
+const opResetSessionBtn = document.getElementById("opResetSessionBtn");
 const chatForm = document.getElementById("helpdeskChatForm");
 const chatBox = document.getElementById("helpdeskChatBox");
+const customerContextSelect = document.getElementById("opChatCustomerId");
 
 function getAgentName(agentId) {
   return `Support ${agentId.toUpperCase()}`;
@@ -74,10 +79,31 @@ function renderMessages(messages) {
 
 async function refreshInbox() {
   const agentId = agentLoginSelect.value;
-  const result = await fetch(`/api/helpdesk/inbox?agentId=${encodeURIComponent(agentId)}`).then((r) => r.json());
+  const selectedConversationId = opConversationId.value;
+  const query = selectedConversationId
+    ? `agentId=${encodeURIComponent(agentId)}&conversationId=${encodeURIComponent(selectedConversationId)}`
+    : `agentId=${encodeURIComponent(agentId)}`;
+  const result = await fetch(`/api/helpdesk/inbox?${query}`).then((r) => r.json());
   renderMessages(result.chatMessages || []);
   agentStatusInfo.textContent = `Assigned conversations: ${(result.assignedConversationIds || []).length} | Pending: ${(result.pendingRequests || []).length}`;
   renderPendingRequests(result.pendingRequests || []);
+}
+
+function formatSessionLabel(session) {
+  return `${new Date(session.updatedAt).toLocaleString()} - ${session.id}`;
+}
+
+async function loadSessionsForCustomer(keepSelection = true) {
+  const customerId = customerContextSelect.value;
+  const existing = keepSelection ? opSessionSelect.value : "";
+  const data = await fetch(`/api/chat/sessions?customerId=${encodeURIComponent(customerId)}`).then((r) => r.json());
+  opSessionSelect.innerHTML = (data.sessions || [])
+    .map((session) => `<option value="${session.id}">${formatSessionLabel(session)}</option>`)
+    .join("");
+  if (existing && (data.sessions || []).some((session) => session.id === existing)) {
+    opSessionSelect.value = existing;
+  }
+  opConversationId.value = opSessionSelect.value || "";
 }
 
 async function refreshAgentDirectory() {
@@ -147,6 +173,14 @@ agentStateSelect.addEventListener("change", async () => {
 
 chatForm.addEventListener("submit", async (event) => {
   event.preventDefault();
+  if (!opConversationId.value) {
+    const created = await fetch("/api/chat/sessions/create", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ customerId: customerContextSelect.value }),
+    }).then((r) => r.json());
+    opConversationId.value = created.conversationId;
+  }
   const payload = Object.fromEntries(new FormData(chatForm).entries());
   await fetch("/chat/send", {
     method: "POST",
@@ -154,13 +188,52 @@ chatForm.addEventListener("submit", async (event) => {
     body: JSON.stringify(payload),
   });
   document.getElementById("opChatText").value = "";
+  await loadSessionsForCustomer();
+  await refreshInbox();
+});
+
+opSessionSelect.addEventListener("change", async () => {
+  opConversationId.value = opSessionSelect.value;
+  await refreshInbox();
+});
+
+customerContextSelect.addEventListener("change", async () => {
+  await loadSessionsForCustomer(false);
+  await refreshInbox();
+});
+
+opNewSessionBtn.addEventListener("click", async () => {
+  const created = await fetch("/api/chat/sessions/create", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ customerId: customerContextSelect.value }),
+  }).then((r) => r.json());
+  await loadSessionsForCustomer();
+  opSessionSelect.value = created.conversationId;
+  opConversationId.value = created.conversationId;
+  chatBox.innerHTML = "";
+  await refreshInbox();
+});
+
+opResetSessionBtn.addEventListener("click", async () => {
+  if (!opConversationId.value) return;
+  await fetch("/api/chat/sessions/reset", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ conversationId: opConversationId.value }),
+  });
+  chatBox.innerHTML = "";
+  await loadSessionsForCustomer();
   await refreshInbox();
 });
 
 opSenderId.value = agentLoginSelect.value;
 opSenderName.value = getAgentName(agentLoginSelect.value);
-refreshAgentDirectory().then(refreshInbox);
+refreshAgentDirectory()
+  .then(() => loadSessionsForCustomer(false))
+  .then(refreshInbox);
 setInterval(async () => {
   await refreshAgentDirectory();
+  await loadSessionsForCustomer();
   await refreshInbox();
 }, 2000);

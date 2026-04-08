@@ -339,3 +339,14 @@ pre {
 button.secondary {
   background: #6b7280;
 }
+
+.session-actions {
+  display: flex;
+  gap: 0.5rem;
+  margin-top: 0.6rem;
+}
+
+.session-actions button {
+  width: auto;
+  margin-top: 0;
+}

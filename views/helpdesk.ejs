@@ -59,12 +59,19 @@
           <input type="hidden" name="source" value="helpdesk" />
           <input type="hidden" name="senderRole" value="agent" />
           <input type="hidden" id="opSenderId" name="senderId" value="agent1" />
+          <input type="hidden" id="opConversationId" name="conversationId" value="" />
           <label for="opChatCustomerId">Customer Context</label>
           <select id="opChatCustomerId" name="customerId">
             <% customers.forEach((customer) => { %>
               <option value="<%= customer.id %>"><%= customer.name %></option>
             <% }) %>
           </select>
+          <label for="opSessionSelect">Conversation Session</label>
+          <select id="opSessionSelect"></select>
+          <div class="session-actions">
+            <button type="button" id="opNewSessionBtn">New Session</button>
+            <button type="button" id="opResetSessionBtn" class="secondary">Reset Session Feed</button>
+          </div>
           <label for="opSenderName">Sender Name</label>
           <input id="opSenderName" name="senderName" value="Support Agent Ava" />
           <label for="opChatText">Message</label>
