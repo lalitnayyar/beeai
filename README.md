@@ -35,7 +35,7 @@ Metrics: [http://localhost:9464/metrics](http://localhost:9464/metrics)
 ### Three interfaces from one Docker container
 
 - BeeAI interactive console: [http://localhost:3000/beeai](http://localhost:3000/beeai)
-- Helpdesk portal: [http://localhost:3000/helpdesk?role=operator](http://localhost:3000/helpdesk?role=operator)
+- Helpdesk portal: [http://localhost:3000/helpdesk](http://localhost:3000/helpdesk)
 - Customer chat portal: [http://localhost:3000/customer](http://localhost:3000/customer)
 
 ### Start/stop scripts
