@@ -1,0 +1,99 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>BeeAI Interactive Console</title>
+    <link rel="stylesheet" href="/styles.css" />
+  </head>
+  <body class="theme-beeai">
+    <header>
+      <h1>BeeAI Interactive Console</h1>
+      <p>Dual-pane visualization with Admin controls and Observe monitoring in one screen.</p>
+      <div class="top-nav">
+        <a class="active" href="/beeai">BeeAI</a>
+        <a href="/helpdesk">Helpdesk</a>
+        <a href="/customer">Customer Chat Portal</a>
+      </div>
+      <p><strong>Disclaimer:</strong> Created by Lalit Nayyar (lalitnayyar@gmail.com) for educational BeeAI learning only.</p>
+    </header>
+
+    <main class="two-pane" data-split-key="beeai-pane-width">
+      <section class="card pane">
+        <h2>Admin Pane</h2>
+        <h3>Create Support Ticket</h3>
+        <form method="post" action="/tickets">
+          <input type="hidden" name="role" value="admin" />
+          <input type="hidden" name="source" value="beeai" />
+          <label for="adminCustomerId">Customer</label>
+          <select id="adminCustomerId" name="customerId" required>
+            <% customers.forEach((customer) => { %>
+              <option value="<%= customer.id %>"><%= customer.name %> (<%= customer.tier %>)</option>
+            <% }) %>
+          </select>
+          <label for="adminTitle">Issue title</label>
+          <input id="adminTitle" name="title" required />
+          <label for="adminMessage">Issue details</label>
+          <textarea id="adminMessage" name="message" rows="5" required></textarea>
+          <button type="submit">Run BeeAI Workflow</button>
+        </form>
+
+        <h3>Integration Controls</h3>
+        <ul>
+          <li>Salesforce CRM: <strong><%= integrations.salesforce.connected ? "Connected" : "Disconnected" %></strong></li>
+          <li>Helpdesk: <strong><%= integrations.helpdesk.provider %></strong></li>
+          <li>Knowledge Base: <strong><%= integrations.knowledgeBase.source %></strong></li>
+        </ul>
+        <p><strong>Metrics endpoint:</strong> <code>http://localhost:9464/metrics</code></p>
+      </section>
+      <div class="splitter" aria-hidden="true"></div>
+
+      <section class="card pane">
+        <h2>Observe Pane</h2>
+        <% if (workflowResult) { %>
+        <h3>Latest Workflow Result</h3>
+        <p><strong>Workflow ID:</strong> <%= workflowResult.workflowId %></p>
+        <div class="result-grid">
+          <article>
+            <h4>Ticket Triage Agent</h4>
+            <p>Category: <strong><%= workflowResult.triage.category %></strong></p>
+            <p>Urgency: <strong><%= workflowResult.triage.urgency %></strong></p>
+            <p>Route: <strong><%= workflowResult.triage.route %></strong></p>
+          </article>
+          <article>
+            <h4>Response Drafting Agent</h4>
+            <p>Tone: <strong><%= workflowResult.response.tone %></strong></p>
+            <pre><%= workflowResult.response.draft %></pre>
+          </article>
+          <article>
+            <h4>Escalation Routing Agent</h4>
+            <p>Escalated: <strong><%= workflowResult.escalation.escalated %></strong></p>
+            <p>Queue: <strong><%= workflowResult.escalation.queue %></strong></p>
+          </article>
+          <article>
+            <h4>Proactive Support Agent</h4>
+            <p>Action: <strong><%= workflowResult.proactive.action %></strong></p>
+          </article>
+        </div>
+        <% } else { %>
+        <p>Run a ticket workflow from the Admin Pane to populate this section.</p>
+        <% } %>
+
+        <h3>Recent Tickets</h3>
+        <ul class="stack">
+          <% tickets.forEach((ticket) => { %>
+            <li><strong><%= ticket.title %></strong> - <%= ticket.customerName %></li>
+          <% }) %>
+        </ul>
+
+        <h3>OpenTelemetry Events</h3>
+        <ul class="stack">
+          <% telemetry.forEach((event) => { %>
+            <li><strong><%= event.eventName %></strong></li>
+          <% }) %>
+        </ul>
+      </section>
+    </main>
+    <script src="/splitter.js"></script>
+  </body>
+</html>

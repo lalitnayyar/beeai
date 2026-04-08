@@ -1,0 +1,106 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Helpdesk Portal</title>
+    <link rel="stylesheet" href="/styles.css" />
+  </head>
+  <body class="theme-helpdesk">
+    <header>
+      <h1>Helpdesk Portal</h1>
+      <p>Single-screen visualization with Operator and Admin panes running side-by-side.</p>
+      <div class="top-nav">
+        <a href="/beeai">BeeAI</a>
+        <a class="active" href="/helpdesk">Helpdesk</a>
+        <a href="/customer">Customer Chat Portal</a>
+      </div>
+    </header>
+
+    <main class="two-pane" data-split-key="helpdesk-pane-width">
+      <section class="card pane">
+        <h2>Operator Pane</h2>
+        <h3>Agent Login</h3>
+        <label for="agentLoginSelect">Logged-in Agent</label>
+        <select id="agentLoginSelect">
+          <% helpdeskAgents.forEach((agent) => { %>
+            <option value="<%= agent.id %>"><%= agent.name %> (<%= agent.state %>)</option>
+          <% }) %>
+        </select>
+        <label for="agentStateSelect">Agent State</label>
+        <select id="agentStateSelect">
+          <option value="online">Online</option>
+          <option value="busy">Busy (other chat)</option>
+          <option value="offline">Offline</option>
+        </select>
+        <p id="agentStatusInfo"></p>
+        <div id="pendingRequestPopup" class="pending-popup hidden"></div>
+
+        <h3>Create Ticket From Helpdesk</h3>
+        <form method="post" action="/tickets">
+          <input type="hidden" name="role" value="operator" />
+          <input type="hidden" name="source" value="helpdesk" />
+          <label for="opCustomerId">Customer</label>
+          <select id="opCustomerId" name="customerId" required>
+            <% customers.forEach((customer) => { %>
+              <option value="<%= customer.id %>"><%= customer.name %></option>
+            <% }) %>
+          </select>
+          <label for="opTitle">Issue title</label>
+          <input id="opTitle" name="title" required />
+          <label for="opMessage">Issue details</label>
+          <textarea id="opMessage" name="message" rows="4" required></textarea>
+          <button type="submit">Create + Run Workflow</button>
+        </form>
+
+        <h3>Live Chat (Agent + Customer)</h3>
+        <form id="helpdeskChatForm" method="post" action="/chat/send">
+          <input type="hidden" name="role" value="operator" />
+          <input type="hidden" name="source" value="helpdesk" />
+          <input type="hidden" name="senderRole" value="agent" />
+          <input type="hidden" id="opSenderId" name="senderId" value="agent1" />
+          <label for="opChatCustomerId">Customer Context</label>
+          <select id="opChatCustomerId" name="customerId">
+            <% customers.forEach((customer) => { %>
+              <option value="<%= customer.id %>"><%= customer.name %></option>
+            <% }) %>
+          </select>
+          <label for="opSenderName">Sender Name</label>
+          <input id="opSenderName" name="senderName" value="Support Agent Ava" />
+          <label for="opChatText">Message</label>
+          <textarea id="opChatText" name="text" rows="3"></textarea>
+          <button type="submit">Send</button>
+        </form>
+        <div id="helpdeskChatBox" class="chat-box"></div>
+      </section>
+      <div class="splitter" aria-hidden="true"></div>
+
+      <section class="card pane">
+        <h2>Admin Pane</h2>
+        <h3>Recent Tickets</h3>
+        <ul class="stack">
+          <% tickets.forEach((ticket) => { %>
+            <li><strong><%= ticket.title %></strong> - <%= ticket.status %></li>
+          <% }) %>
+        </ul>
+
+        <h3>Telemetry Stream</h3>
+        <ul class="stack">
+          <% telemetry.forEach((event) => { %>
+            <li><strong><%= event.eventName %></strong></li>
+          <% }) %>
+        </ul>
+
+        <h3>Integration Status</h3>
+        <ul class="stack">
+          <li>Salesforce CRM: <strong><%= integrations.salesforce.connected ? "Connected" : "Disconnected" %></strong></li>
+          <li>Helpdesk: <strong><%= integrations.helpdesk.provider %></strong></li>
+          <li>Knowledge Base: <strong><%= integrations.knowledgeBase.source %></strong></li>
+        </ul>
+        <p><strong>Metrics endpoint:</strong> <code>http://localhost:9464/metrics</code></p>
+      </section>
+    </main>
+    <script src="/splitter.js"></script>
+    <script src="/helpdesk-live-chat.js"></script>
+  </body>
+</html>

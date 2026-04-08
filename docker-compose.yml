@@ -1,0 +1,13 @@
+services:
+  beeai-app:
+    build: .
+    container_name: beeai-support-demo
+    ports:
+      - "3000:3000"
+      - "9464:9464"
+    environment:
+      - PORT=3000
+      - OTEL_METRICS_PORT=9464
+      - OTEL_METRICS_ENDPOINT=/metrics
+    volumes:
+      - ./data:/app/data

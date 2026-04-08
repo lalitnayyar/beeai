@@ -1,0 +1,165 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>BeeAI Customer Support Demo</title>
+    <link rel="stylesheet" href="/styles.css" />
+  </head>
+  <body>
+    <header>
+      <h1>BeeAI Multi-Agent Customer Support Demo</h1>
+      <p>
+        Interactive local demo showing ticket triage, response drafting, escalation routing, and proactive
+        support with CRM/helpdesk integrations and telemetry.
+      </p>
+      <p>
+        <strong>Disclaimer:</strong> Created by Lalit Nayyar (lalitnayyar@gmail.com) for educational learning on
+        BeeAI workflows; this is a demo prototype and not production support software.
+      </p>
+      <div class="role-switch">
+        <a href="/?role=operator" class="<%= role === 'operator' ? 'active' : '' %>">Operator View</a>
+        <a href="/?role=admin" class="<%= role === 'admin' ? 'active' : '' %>">Admin View</a>
+      </div>
+    </header>
+
+    <main class="grid">
+      <section class="card">
+        <h2>Create Support Ticket</h2>
+        <form method="post" action="/tickets">
+          <input type="hidden" name="role" value="<%= role %>" />
+          <label for="customerId">Customer</label>
+          <select id="customerId" name="customerId" required>
+            <% customers.forEach((customer) => { %>
+              <option value="<%= customer.id %>">
+                <%= customer.name %> (<%= customer.tier %>, churn risk <%= customer.churnRisk %>)
+              </option>
+            <% }) %>
+          </select>
+
+          <label for="title">Issue title</label>
+          <input id="title" name="title" required placeholder="e.g., API outage in EU region" />
+
+          <label for="message">Issue details</label>
+          <textarea id="message" name="message" rows="5" required placeholder="Describe the customer issue"></textarea>
+
+          <button type="submit">Run BeeAI Workflow</button>
+        </form>
+      </section>
+
+      <section class="card">
+        <h2>Integrations (<%= role %>)</h2>
+        <ul>
+          <li>Salesforce CRM: <strong><%= integrations.salesforce.connected ? "Connected" : "Disconnected" %></strong></li>
+          <li>Helpdesk: <strong><%= integrations.helpdesk.provider %></strong></li>
+          <li>Knowledge Base: <strong><%= integrations.knowledgeBase.source %></strong></li>
+        </ul>
+        <% if (role === "admin") { %>
+          <p><strong>Admin controls:</strong> integration state can be managed centrally (demo mode).</p>
+          <p><strong>Metrics endpoint:</strong> <code>http://localhost:9464/metrics</code></p>
+        <% } else { %>
+          <p><strong>Operator focus:</strong> handle incoming tickets and customer chats.</p>
+        <% } %>
+      </section>
+
+      <% if (workflowResult) { %>
+      <section class="card full">
+        <h2>Latest Workflow Result</h2>
+        <p><strong>Workflow ID:</strong> <%= workflowResult.workflowId %></p>
+        <div class="result-grid">
+          <article>
+            <h3>Ticket Triage Agent</h3>
+            <p>Category: <strong><%= workflowResult.triage.category %></strong></p>
+            <p>Urgency: <strong><%= workflowResult.triage.urgency %></strong></p>
+            <p>Route: <strong><%= workflowResult.triage.route %></strong></p>
+            <p><%= workflowResult.triage.reason %></p>
+          </article>
+          <article>
+            <h3>Response Drafting Agent</h3>
+            <p>Tone: <strong><%= workflowResult.response.tone %></strong></p>
+            <pre><%= workflowResult.response.draft %></pre>
+          </article>
+          <article>
+            <h3>Escalation Routing Agent</h3>
+            <p>Escalated: <strong><%= workflowResult.escalation.escalated %></strong></p>
+            <p>Queue: <strong><%= workflowResult.escalation.queue %></strong></p>
+            <p>Owner: <strong><%= workflowResult.escalation.owner %></strong></p>
+          </article>
+          <article>
+            <h3>Proactive Support Agent</h3>
+            <p>Action: <strong><%= workflowResult.proactive.action %></strong></p>
+            <p>Churn Risk Signal: <strong><%= workflowResult.proactive.churnRisk %></strong></p>
+          </article>
+        </div>
+      </section>
+      <% } %>
+
+      <section class="card">
+        <h2>Recent Tickets</h2>
+        <% if (tickets.length === 0) { %>
+          <p>No tickets submitted yet.</p>
+        <% } else { %>
+          <ul class="stack">
+            <% tickets.forEach((ticket) => { %>
+              <li>
+                <strong><%= ticket.title %></strong> - <%= ticket.customerName %><br />
+                <small><%= ticket.status %> at <%= new Date(ticket.createdAt).toLocaleString() %></small>
+              </li>
+            <% }) %>
+          </ul>
+        <% } %>
+      </section>
+
+      <section class="card">
+        <h2>OpenTelemetry Events</h2>
+        <% if (telemetry.length === 0) { %>
+          <p>No events yet.</p>
+        <% } else { %>
+          <ul class="stack">
+            <% telemetry.forEach((event) => { %>
+              <li>
+                <strong><%= event.eventName %></strong><br />
+                <small><%= new Date(event.timestamp).toLocaleString() %></small>
+              </li>
+            <% }) %>
+          </ul>
+        <% } %>
+      </section>
+
+      <section class="card full">
+        <h2>Lightweight Helpdesk Chat</h2>
+        <form method="post" action="/chat/send">
+          <input type="hidden" name="role" value="<%= role %>" />
+          <label for="chatCustomerId">Customer Context</label>
+          <select id="chatCustomerId" name="customerId">
+            <% customers.forEach((customer) => { %>
+              <option value="<%= customer.id %>"><%= customer.name %></option>
+            <% }) %>
+          </select>
+
+          <label for="senderRole">Sender Role</label>
+          <select id="senderRole" name="senderRole">
+            <option value="customer">End Customer</option>
+            <option value="agent">Sample Agent</option>
+          </select>
+
+          <label for="senderName">Sender Name</label>
+          <input id="senderName" name="senderName" value="<%= role === 'admin' ? 'Admin Supervisor' : 'Support Agent Ava' %>" />
+
+          <label for="chatText">Message</label>
+          <textarea id="chatText" name="text" rows="3" placeholder="Type a customer issue or agent response"></textarea>
+          <button type="submit">Send Chat Message</button>
+        </form>
+
+        <div class="chat-box">
+          <% chatMessages.forEach((msg) => { %>
+            <div class="chat-message <%= msg.senderRole === 'agent' ? 'agent' : 'customer' %>">
+              <strong><%= msg.senderName %></strong> (<%= msg.senderRole %>)<br />
+              <span><%= msg.text %></span>
+            </div>
+          <% }) %>
+        </div>
+      </section>
+    </main>
+  </body>
+</html>

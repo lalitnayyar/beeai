@@ -1,0 +1,48 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Customer Chat Portal</title>
+    <link rel="stylesheet" href="/styles.css" />
+  </head>
+  <body class="theme-customer">
+    <header>
+      <h1>Customer Chat Portal</h1>
+      <p>End-customer conversation portal connected to the BeeAI helpdesk workflow.</p>
+      <div class="top-nav">
+        <a href="/beeai">BeeAI</a>
+        <a href="/helpdesk?role=operator">Helpdesk</a>
+        <a class="active" href="/customer">Customer Chat Portal</a>
+      </div>
+    </header>
+
+    <main class="grid">
+      <section class="card full">
+        <h2>Start Chat</h2>
+        <form id="customerChatForm" method="post" action="/chat/send">
+          <input type="hidden" name="source" value="customer" />
+          <input type="hidden" name="senderRole" value="customer" />
+          <label for="customerId">I am from</label>
+          <select id="customerId" name="customerId" required>
+            <% customers.forEach((customer) => { %>
+              <option value="<%= customer.id %>"><%= customer.name %></option>
+            <% }) %>
+          </select>
+          <label for="senderName">Your name</label>
+          <input id="senderName" name="senderName" placeholder="Customer name" required />
+          <label for="text">Your message</label>
+          <textarea id="text" name="text" rows="4" placeholder="Describe your issue..." required></textarea>
+          <button type="submit">Send Message</button>
+        </form>
+        <p id="assignedAgentInfo"></p>
+      </section>
+
+      <section class="card full">
+        <h2>Conversation Feed</h2>
+        <div id="customerChatBox" class="chat-box"></div>
+      </section>
+    </main>
+    <script src="/customer-live-chat.js"></script>
+  </body>
+</html>
