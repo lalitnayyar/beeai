@@ -36,6 +36,55 @@ function ensureHelpdeskState() {
   if (!db.data.conversationAssignments || typeof db.data.conversationAssignments !== "object") {
     db.data.conversationAssignments = {};
   }
+  if (!Array.isArray(db.data.conversationSessions)) {
+    const discovered = {};
+    for (const msg of db.data.chatMessages || []) {
+      if (!discovered[msg.conversationId]) {
+        discovered[msg.conversationId] = {
+          id: msg.conversationId,
+          customerId: msg.conversationId.replace(/^conv-/, ""),
+          createdAt: msg.createdAt || new Date().toISOString(),
+          updatedAt: msg.createdAt || new Date().toISOString(),
+        };
+      }
+      if ((msg.createdAt || "") > discovered[msg.conversationId].updatedAt) {
+        discovered[msg.conversationId].updatedAt = msg.createdAt;
+      }
+    }
+    db.data.conversationSessions = Object.values(discovered);
+  }
+}
+
+function listSessionsForCustomer(customerId) {
+  return (db.data.conversationSessions || [])
+    .filter((session) => session.customerId === customerId)
+    .sort((a, b) => new Date(b.updatedAt) - new Date(a.updatedAt));
+}
+
+function ensureConversationSession(customerId, conversationId) {
+  let session = (db.data.conversationSessions || []).find((item) => item.id === conversationId);
+  if (!session) {
+    session = {
+      id: conversationId,
+      customerId,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    };
+    db.data.conversationSessions.push(session);
+  }
+  return session;
+}
+
+function createConversationSession(customerId) {
+  const conversationId = `conv-${customerId}-${Date.now()}`;
+  const now = new Date().toISOString();
+  db.data.conversationSessions.unshift({
+    id: conversationId,
+    customerId,
+    createdAt: now,
+    updatedAt: now,
+  });
+  return conversationId;
 }
 
 function getAgentLoad(agentId) {
@@ -206,7 +255,8 @@ app.post("/chat/send", async (req, res) => {
   await db.read();
   ensureHelpdeskState();
   const customer = db.data.customers.find((item) => item.id === customerId);
-  const conversationId = `conv-${customerId || "general"}`;
+  const conversationId = req.body.conversationId || createConversationSession(customerId || "general");
+  const session = ensureConversationSession(customerId || "general", conversationId);
   const assignedAgent = assignAgentToConversation(conversationId);
 
   const userMessage = {
@@ -220,6 +270,7 @@ app.post("/chat/send", async (req, res) => {
     createdAt: new Date().toISOString(),
   };
   db.data.chatMessages.push(userMessage);
+  session.updatedAt = userMessage.createdAt;
   chatMessageCounter.add(1, { sender: userMessage.senderRole });
 
   if (userMessage.senderRole === "customer" && assignedAgent) {
@@ -243,6 +294,7 @@ app.post("/chat/send", async (req, res) => {
       createdAt: new Date().toISOString(),
     };
     db.data.chatMessages.push(waitingMessage);
+    session.updatedAt = waitingMessage.createdAt;
     chatMessageCounter.add(1, { sender: "system" });
   } else if (userMessage.senderRole === "customer" && !assignedAgent) {
     const queueMessage = {
@@ -255,6 +307,7 @@ app.post("/chat/send", async (req, res) => {
       createdAt: new Date().toISOString(),
     };
     db.data.chatMessages.push(queueMessage);
+    session.updatedAt = queueMessage.createdAt;
     chatMessageCounter.add(1, { sender: "system" });
   }
 
@@ -293,6 +346,7 @@ app.get("/api/helpdesk/inbox", async (req, res) => {
   await db.read();
   ensureHelpdeskState();
   const agentId = (req.query.agentId || "").toString();
+  const conversationIdFilter = (req.query.conversationId || "").toString();
   const assignments = Object.entries(db.data.conversationAssignments).filter(([, assignment]) => assignment.agentId === agentId);
   const assignedConversationIds = assignments
     .filter(([, assignment]) => assignment.status === "accepted")
@@ -300,11 +354,17 @@ app.get("/api/helpdesk/inbox", async (req, res) => {
   const pendingRequests = assignments
     .filter(([, assignment]) => assignment.status === "pending")
     .map(([conversationId]) => ({ conversationId, ...db.data.conversationAssignments[conversationId] }));
-  const inboxMessages = db.data.chatMessages.filter((msg) => assignedConversationIds.includes(msg.conversationId));
+  const selectedIds = conversationIdFilter ? [conversationIdFilter] : assignedConversationIds;
+  const inboxMessages = db.data.chatMessages.filter((msg) => selectedIds.includes(msg.conversationId));
+  const sessions = assignedConversationIds
+    .map((id) => (db.data.conversationSessions || []).find((session) => session.id === id))
+    .filter(Boolean)
+    .sort((a, b) => new Date(b.updatedAt) - new Date(a.updatedAt));
   res.json({
     agentId,
     assignedConversationIds,
     pendingRequests,
+    sessions,
     chatMessages: inboxMessages.slice(-100),
   });
 });
@@ -313,11 +373,13 @@ app.get("/api/customer/chat", async (req, res) => {
   await db.read();
   ensureHelpdeskState();
   const customerId = (req.query.customerId || "").toString();
-  const conversationId = `conv-${customerId || "general"}`;
+  const selectedConversationId = (req.query.conversationId || "").toString();
+  const sessions = listSessionsForCustomer(customerId || "general");
+  const conversationId = selectedConversationId || sessions[0]?.id || "";
   const assigned = db.data.conversationAssignments[conversationId];
   const assignedAgent = db.data.helpdeskAgents.find((agent) => agent.id === assigned?.agentId) || null;
-  const messages = db.data.chatMessages.filter((msg) => msg.conversationId === conversationId).slice(-100);
-  res.json({ conversationId, assignedAgent, assignmentStatus: assigned?.status || null, messages });
+  const messages = conversationId ? db.data.chatMessages.filter((msg) => msg.conversationId === conversationId).slice(-100) : [];
+  res.json({ conversationId, sessions: listSessionsForCustomer(customerId || "general"), assignedAgent, assignmentStatus: assigned?.status || null, messages });
 });
 
 app.post("/api/helpdesk/agent-status", async (req, res) => {
@@ -381,6 +443,8 @@ app.post("/api/helpdesk/assignment-action", async (req, res) => {
         text: `${agentId} rejected chat. Routed to ${rerouteAgent.name} for acceptance.`,
         createdAt: new Date().toISOString(),
       });
+      const session = (db.data.conversationSessions || []).find((item) => item.id === conversationId);
+      if (session) session.updatedAt = new Date().toISOString();
     } else {
       db.data.chatMessages.push({
         id: uuidv4(),
@@ -391,6 +455,8 @@ app.post("/api/helpdesk/assignment-action", async (req, res) => {
         text: `${agentId} rejected chat. No other online agent available; chat remains queued.`,
         createdAt: new Date().toISOString(),
       });
+      const session = (db.data.conversationSessions || []).find((item) => item.id === conversationId);
+      if (session) session.updatedAt = new Date().toISOString();
     }
     recordTelemetry("beeai.chat.assignment.rejected", { agentId, conversationId });
     await db.write();
@@ -398,6 +464,45 @@ app.post("/api/helpdesk/assignment-action", async (req, res) => {
   }
 
   return res.status(400).json({ error: "Invalid action" });
+});
+
+app.get("/api/chat/sessions", async (req, res) => {
+  await db.read();
+  ensureHelpdeskState();
+  const customerId = (req.query.customerId || "").toString();
+  if (!customerId) {
+    return res.json({ sessions: [] });
+  }
+  res.json({ sessions: listSessionsForCustomer(customerId) });
+});
+
+app.post("/api/chat/sessions/create", async (req, res) => {
+  await db.read();
+  ensureHelpdeskState();
+  const { customerId } = req.body;
+  const conversationId = createConversationSession(customerId || "general");
+  await db.write();
+  res.json({ ok: true, conversationId, sessions: listSessionsForCustomer(customerId || "general") });
+});
+
+app.post("/api/chat/sessions/reset", async (req, res) => {
+  await db.read();
+  ensureHelpdeskState();
+  const { conversationId } = req.body;
+  if (!conversationId) {
+    return res.status(400).json({ error: "conversationId required" });
+  }
+  db.data.chatMessages = db.data.chatMessages.filter((msg) => msg.conversationId !== conversationId);
+  delete db.data.conversationAssignments[conversationId];
+  const session = (db.data.conversationSessions || []).find((item) => item.id === conversationId);
+  if (session) {
+    const now = new Date().toISOString();
+    session.createdAt = now;
+    session.updatedAt = now;
+  }
+  recordTelemetry("beeai.chat.session.reset", { conversationId });
+  await db.write();
+  res.json({ ok: true });
 });
 
 app.listen(port, () => {
